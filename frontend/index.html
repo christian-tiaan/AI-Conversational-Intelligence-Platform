@@ -61,7 +61,7 @@
       <div class="field"><label>Topic or brief</label><textarea id="content-brief" placeholder="Describe the topic, audience, key points and desired tone…"></textarea></div>
       <div class="field"><label>Tone</label><select id="content-tone"><option>Clear and professional</option><option>Friendly and conversational</option><option>Confident and persuasive</option><option>Educational and informative</option></select></div>
       <button class="btn" id="generate-btn" onclick="generateContent()">Generate content ↗</button>
-    </div><div class="panel"><div class="panel-head"><h3>Your draft</h3><button class="btn secondary" onclick="copyDraft()">Copy</button></div><div class="output" id="content-output">Your AI-generated draft will appear here.</div></div></div>
+    </div><div class="panel"><div class="panel-head"><h3>Your draft</h3><button class="btn secondary" onclick="copyDraft()">Copy</button></div><div class="output" id="content-output">Your AI-generated draft will appear here.</div><div class="panel-head" style="margin-top:18px"><h3>SEO & publishing kit</h3></div><div class="output" id="seo-output" style="min-height:110px">Keywords, meta description and publishing suggestions will appear here.</div></div></div>
   </section>
   <section class="view" id="view-knowledge"><div class="panel"><div class="panel-head"><h3>Knowledge base</h3><span class="sub">RAG module · Planned integration</span></div><div class="empty"><div style="font-size:28px;margin-bottom:10px">▤</div><b>Build a knowledge layer for your AI</b><p>Document upload, text extraction, chunking, embeddings, vector search and source citations are not enabled in this prototype.</p><p class="notice">Next backend milestone: private file storage + PostgreSQL/pgvector retrieval with tenant-level access controls.</p></div></div></section>
   <section class="view" id="view-support"><div class="panel"><div class="panel-head"><h3>Live support workspace</h3><span class="sub">Customer service module · Preview</span></div><div class="empty"><div style="font-size:28px;margin-bottom:10px">◎</div><b>Human support inbox is not connected yet</b><p>This screen is a product placeholder. Real-time visitor chat, agent assignment, presence, notifications and human handoff still need backend services and a WebSocket/event layer.</p></div></div></section>
@@ -139,7 +139,29 @@ async function requestAI(messages,onProgress=()=>{}){
 async function sendChat(){const input=$("chat-input"),text=input.value.trim();if(!text)return;input.value="";history.push({role:"user",content:text});addMessage("user",text);const btn=$("send-btn");btn.disabled=true;btn.textContent="Loading AI…";const replyNode=addMessage("assistant","Preparing AI response…");try{const system=$("chat-style").value;const reply=await requestAI([{role:"system",content:system},...history.slice(-20)],(status,partial)=>{btn.textContent=status.length>22?"Working…":status;replyNode.textContent=partial||status;$("messages").scrollTop=$("messages").scrollHeight;});history.push({role:"assistant",content:reply});replyNode.textContent=reply;}catch(e){replyNode.textContent="I couldn’t generate a response: "+e.message;}finally{btn.disabled=false;btn.textContent="Send ↗";}}
 $("chat-input").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat();}});
 function clearChat(){history=[];$("messages").innerHTML="";addMessage("assistant","New conversation started. What would you like to work on?");}
-async function generateContent(){const brief=$("content-brief").value.trim();if(!brief){toast("Enter a topic or brief first.");return;}const btn=$("generate-btn");btn.disabled=true;btn.textContent="Generating…";$("content-output").textContent="Creating your draft…";try{const prompt="Create a "+$("content-type").value+" in a "+$("content-tone").value+" tone. Use this brief:\n"+brief+"\nReturn polished, ready-to-edit content. Do not invent facts.";const result=await requestAI([{role:"system",content:"You are an expert business content writer. Follow the brief carefully."},{role:"user",content:prompt}]);$("content-output").textContent=result;}catch(e){$("content-output").textContent="Unable to generate content: "+e.message;}finally{btn.disabled=false;btn.textContent="Generate content ↗";}}
+async function generateContent(){
+  const brief=$("content-brief").value.trim();
+  if(!brief){toast("Enter a topic or brief first.");return;}
+  const base=getApi();
+  if(!base){$("content-output").textContent="Connect your hosted AI backend in Settings to use the four-stage content engine. The content pipeline needs a configured cloud model.";toast("Configure the backend API first.");showView("settings");return;}
+  const btn=$("generate-btn");btn.disabled=true;btn.textContent="Strategy…";
+  $("content-output").textContent="Stage 1/4 — Analyzing the brief and audience…";
+  const seo=$("seo-output");if(seo)seo.textContent="SEO and publishing suggestions will appear here after generation.";
+  try{
+    const response=await fetch(base+"/api/v1/content/generate",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({content_type:$("content-type").value,brief,tone:$("content-tone").value,audience:"General audience"})
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.detail||"Content engine returned HTTP "+response.status+".");
+    if(!data.content||!data.content.trim())throw new Error("The content engine returned an empty draft.");
+    $("content-output").textContent=data.content;
+    if(seo)seo.textContent=data.seo_kit||("Generation pipeline: "+(data.pipeline||[]).join(" → ")+"\nModel: "+(data.model||"Configured provider"));
+    toast("Your content has been generated.");
+  }catch(e){
+    $("content-output").textContent="Unable to generate content: "+e.message+"\n\nCheck that your backend is deployed and its AI provider settings are configured.";
+  }finally{btn.disabled=false;btn.textContent="Generate content ↗";}
+}
 async function copyDraft(){const value=$("content-output").textContent;try{await navigator.clipboard.writeText(value);toast("Draft copied.");}catch(e){toast("Clipboard access is unavailable in this browser.");}}
 (async function init(){const saved=getApi();$("api-url").value=saved;$("playground-url").value=saved;if(saved){checkApi();return;}if("LanguageModel" in window){try{const a=await LanguageModel.availability({expectedInputs:[{type:"text",languages:["en"]}],expectedOutputs:[{type:"text",languages:["en"]}]});$("status-text").textContent=a==="available"?"On-device AI ready":a==="downloadable"?"On-device AI can be downloaded":a==="downloading"?"On-device AI downloading":"On-device AI unavailable";$("stat-connection").textContent=a==="available"?"Local AI":"Check device";$("status-dot").classList.toggle("ok",a==="available");}catch(e){$("status-text").textContent="AI availability unknown";}}else{$("status-text").textContent="Connect cloud AI in Settings";}})();
 </script>
