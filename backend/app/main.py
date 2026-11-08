@@ -219,18 +219,28 @@ async def generate_content(request: ContentRequest) -> dict:
 
         final_content = await call_model(
             client, endpoint, headers,
-            "Act as a meticulous senior editor. Improve the draft for clarity, flow, accuracy, "
-            "readability and usefulness. Remove repetition and generic AI phrasing. Preserve the "
-            "meaning and do not add unsupported facts. Return only the finished content, ready to use. "
-            "For a blog outline, keep it an outline. For LinkedIn or other short formats, keep it concise.\n\n"
-            f"Content type: {content_type}\nTone: {tone}\nAudience: {audience}\nDraft:\n{draft}",
-            temperature=0.35, max_tokens=2800 if not short_format else 1400,
+            "Act as a meticulous senior editor. First improve the draft for clarity, flow, accuracy, "
+            "readability and usefulness. Remove repetition and generic AI phrasing. Preserve meaning "
+            "and do not add unsupported facts. Then write a compact SEO and publishing kit containing "
+            "relevant keywords, a meta description when appropriate, and one platform-specific publishing "
+            "suggestion. Do not invent search-volume data. Keep short-form content concise. "
+            "Separate the finished content and the kit using this exact marker on its own line: "
+            "\\n---SEO & PUBLISHING KIT---\\n. Return no extra commentary.\\n\\n"
+            f"Content type: {content_type}\\nTone: {tone}\\nAudience: {audience}\\nDraft:\\n{draft}",
+            temperature=0.35, max_tokens=3000 if not short_format else 1600,
         )
 
+    marker = "---SEO & PUBLISHING KIT---"
+    if marker in final_content:
+        polished_content, seo_kit = final_content.split(marker, 1)
+    else:
+        polished_content, seo_kit = final_content, "SEO kit was not returned by the provider. The generated content is available above."
+
     return {
-        "content": final_content,
+        "content": polished_content.strip(),
+        "seo_kit": seo_kit.strip(),
         "strategy": strategy,
         "outline": outline,
         "model": settings.ai_model,
-        "pipeline": ["strategy", "outline", "draft", "editorial_polish"],
+        "pipeline": ["strategy", "outline", "draft", "seo_editorial_polish"],
     }
