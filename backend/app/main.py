@@ -224,8 +224,7 @@ async def generate_content(request: ContentRequest) -> dict:
             "and do not add unsupported facts. Then write a compact SEO and publishing kit containing "
             "relevant keywords, a meta description when appropriate, and one platform-specific publishing "
             "suggestion. Do not invent search-volume data. Keep short-form content concise. "
-            "Separate the finished content and the kit using this exact marker on its own line: "
-            "\\n---SEO & PUBLISHING KIT---\\n. Return no extra commentary.\\n\\n"
+            "Separate the finished content and the kit using this exact marker on its own line: ---SEO & PUBLISHING KIT---. Return no extra commentary."
             f"Content type: {content_type}\\nTone: {tone}\\nAudience: {audience}\\nDraft:\\n{draft}",
             temperature=0.35, max_tokens=3000 if not short_format else 1600,
         )
