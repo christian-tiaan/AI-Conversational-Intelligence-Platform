@@ -1,8 +1,10 @@
 services:
   - type: web
     name: synvoraith-ai-conversation-api
-    runtime: docker
-    plan: starter
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: APP_ENV
@@ -14,4 +16,4 @@ services:
       - key: AI_MODEL
         sync: false
       - key: CORS_ORIGINS
-        sync: false
+        value: https://christian-tiaan.github.io
