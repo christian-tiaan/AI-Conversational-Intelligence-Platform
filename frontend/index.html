@@ -81,43 +81,62 @@ function getApi(){return (localStorage.getItem("synvoraith_api_url")||"").replac
 function toast(s){const t=$("toast");t.textContent=s;t.style.display="block";setTimeout(()=>t.style.display="none",2800);}
 function saveSettings(){const value=$("api-url").value.trim().replace(/\/+$/,"");if(value&&!/^https?:\/\//i.test(value)){toast("Enter a valid http or https URL.");return;}localStorage.setItem("synvoraith_api_url",value);$("settings-feedback").textContent=value?"Backend URL saved in this browser. Test the connection next.":"Backend URL cleared.";toast("Connection settings saved.");}
 async function checkApi(){const base=$("api-url").value.trim().replace(/\/+$/,"")||getApi();if(!base){toast("Add your backend URL in Settings first.");return;}const out=$("diagnostics");out.textContent="Checking "+base+" …";try{const r=await fetch(base+"/health");if(!r.ok)throw new Error("HTTP "+r.status);const data=await r.json();out.textContent="Connected successfully\nStatus: "+data.status+"\nEnvironment: "+(data.environment||"unknown");$("status-dot").classList.add("ok");$("status-text").textContent="API connected";$("stat-connection").textContent="Online";}catch(e){out.textContent="Connection failed\n"+e.message+"\n\nCheck the API URL, backend deployment and CORS_ORIGINS configuration."; $("status-dot").classList.remove("ok");$("status-text").textContent="API unavailable";$("stat-connection").textContent="Offline";}}
-function addMessage(role,content){const node=document.createElement("div");node.className="msg "+role;const who=document.createElement("span");who.className="who";who.textContent=role==="user"?"You":"Synvoraith assistant";const body=document.createElement("div");body.textContent=content;node.append(who,body);$("messages").append(node);$("messages").scrollTop=$("messages").scrollHeight;}
-async function runBrowserModel(messages){
-  if(!("LanguageModel" in window))throw new Error("This browser does not provide Chrome's built-in AI model. Use the latest Chrome desktop or connect a hosted model API in Settings.");
+function addMessage(role,content){const node=document.createElement("div");node.className="msg "+role;const who=document.createElement("span");who.className="who";who.textContent=role==="user"?"You":"Synvoraith assistant";const body=document.createElement("div");body.textContent=content;node.append(who,body);$("messages").append(node);$("messages").scrollTop=$("messages").scrollHeight;return body;}
+async function runBrowserModel(messages,onProgress){
+  if(!("LanguageModel" in window))throw new Error("This browser does not provide Chrome's built-in AI model. Connect a hosted model API in Settings.");
   const modelOptions={expectedInputs:[{type:"text",languages:["en"]}],expectedOutputs:[{type:"text",languages:["en"]}]};
-  const availability=await LanguageModel.availability(modelOptions);
-  if(availability==="unavailable")throw new Error("The on-device AI model is unavailable on this device. Connect a hosted AI backend in Settings to enable generation.");
+  onProgress("Checking on-device model…");
+  const availability=await LanguageModel.availability();
+  if(availability==="unavailable")throw new Error("The on-device model is unavailable on this device. Connect a hosted AI backend in Settings.");
   const prompts=messages.map(m=>({role:m.role,content:m.content}));
-  const session=await LanguageModel.create({
-    ...modelOptions,
-    initialPrompts:prompts.slice(0,-1),
-    monitor(m){m.addEventListener("downloadprogress",e=>{$("status-text").textContent="Downloading on-device AI "+Math.round(e.loaded*100)+"%";});}
-  });
-  try{return await session.prompt(prompts[prompts.length-1].content);}
-  finally{session.destroy();}
+  onProgress(availability==="downloadable"||availability==="downloading"?"Downloading on-device AI model…":"Loading on-device AI…");
+  let session;
+  try{
+    session=await LanguageModel.create({
+      ...modelOptions,
+      initialPrompts:prompts.slice(0,-1),
+      monitor(m){m.addEventListener("downloadprogress",e=>{onProgress("Downloading AI model… "+Math.round(e.loaded*100)+"%");});}
+    });
+    onProgress("Generating response…");
+    if(typeof session.promptStreaming==="function"){
+      let answer="";
+      const stream=session.promptStreaming(prompts[prompts.length-1].content);
+      for await(const chunk of stream){answer+=chunk;onProgress("Generating response…",answer);}
+      if(!answer.trim())throw new Error("The on-device model returned an empty response.");
+      return answer;
+    }
+    const answer=await session.prompt(prompts[prompts.length-1].content);
+    if(!answer||!answer.trim())throw new Error("The on-device model returned an empty response.");
+    onProgress("Response ready",answer);
+    return answer;
+  }finally{if(session)session.destroy();}
 }
-async function requestAI(messages){
+async function requestAI(messages,onProgress=()=>{}){
   const base=getApi();
   if(base){
+    onProgress("Connecting to hosted AI…");
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),120000);
     try{
-      const response=await fetch(base+"/api/v1/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages,temperature:.7,max_tokens:1000})});
+      const response=await fetch(base+"/api/v1/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages,temperature:.7,max_tokens:1000}),signal:controller.signal});
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.detail||"AI backend returned HTTP "+response.status+".");
-      if(data.reply)return data.reply;
+      if(data.reply&&data.reply.trim()){onProgress("Response ready",data.reply);return data.reply;}
       throw new Error("The backend returned an empty response.");
     }catch(error){
       console.warn("Hosted AI unavailable; trying browser AI.",error);
-    }
+      onProgress("Hosted AI unavailable. Checking local model…");
+    }finally{clearTimeout(timeout);}
   }
   try{
-    const answer=await runBrowserModel(messages);
+    const answer=await runBrowserModel(messages,onProgress);
     $("status-dot").classList.add("ok");$("status-text").textContent="On-device AI active";$("stat-connection").textContent="Local AI";
     return answer;
   }catch(localError){
-    throw new Error((base?"Hosted API failed and local AI is unavailable. ":"") + localError.message);
+    throw new Error((base?"Hosted API failed and local AI is unavailable. ":"")+localError.message);
   }
 }
-async function sendChat(){const input=$("chat-input"),text=input.value.trim();if(!text)return;input.value="";history.push({role:"user",content:text});addMessage("user",text);const btn=$("send-btn");btn.disabled=true;btn.textContent="Thinking…";try{const system=$("chat-style").value;const reply=await requestAI([{role:"system",content:system},...history.slice(-20)]);history.push({role:"assistant",content:reply});addMessage("assistant",reply);}catch(e){addMessage("assistant","I couldn’t reach the AI service: "+e.message);}finally{btn.disabled=false;btn.textContent="Send ↗";}}
+async function sendChat(){const input=$("chat-input"),text=input.value.trim();if(!text)return;input.value="";history.push({role:"user",content:text});addMessage("user",text);const btn=$("send-btn");btn.disabled=true;btn.textContent="Loading AI…";const replyNode=addMessage("assistant","Preparing AI response…");try{const system=$("chat-style").value;const reply=await requestAI([{role:"system",content:system},...history.slice(-20)],(status,partial)=>{btn.textContent=status.length>22?"Working…":status;replyNode.textContent=partial||status;$("messages").scrollTop=$("messages").scrollHeight;});history.push({role:"assistant",content:reply});replyNode.textContent=reply;}catch(e){replyNode.textContent="I couldn’t generate a response: "+e.message;}finally{btn.disabled=false;btn.textContent="Send ↗";}}
 $("chat-input").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat();}});
 function clearChat(){history=[];$("messages").innerHTML="";addMessage("assistant","New conversation started. What would you like to work on?");}
 async function generateContent(){const brief=$("content-brief").value.trim();if(!brief){toast("Enter a topic or brief first.");return;}const btn=$("generate-btn");btn.disabled=true;btn.textContent="Generating…";$("content-output").textContent="Creating your draft…";try{const prompt="Create a "+$("content-type").value+" in a "+$("content-tone").value+" tone. Use this brief:\n"+brief+"\nReturn polished, ready-to-edit content. Do not invent facts.";const result=await requestAI([{role:"system",content:"You are an expert business content writer. Follow the brief carefully."},{role:"user",content:prompt}]);$("content-output").textContent=result;}catch(e){$("content-output").textContent="Unable to generate content: "+e.message;}finally{btn.disabled=false;btn.textContent="Generate content ↗";}}
