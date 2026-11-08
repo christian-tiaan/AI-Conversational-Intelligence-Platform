@@ -50,7 +50,7 @@
   </section>
   <section class="view" id="view-chat">
     <div class="chat-layout"><div class="panel chatbox"><div class="panel-head"><div><h3>AI conversation</h3><span class="sub">Natural language assistant</span></div><button class="btn secondary" onclick="clearChat()">New chat</button></div>
-      <div class="messages" id="messages"><div class="msg assistant"><span class="who">Synvoraith assistant</span>Hello! I’m ready to help you explore ideas, answer questions, and solve problems. Connect your model API in Settings to enable live responses.</div></div>
+      <div class="messages" id="messages"><div class="msg assistant"><span class="who">Synvoraith assistant</span>Hello! I’m ready to help. I’ll use your connected cloud model, or Chrome’s built-in on-device AI when available.</div></div>
       <div class="composer"><textarea id="chat-input" placeholder="Message Synvoraith AI…" rows="1"></textarea><button class="btn" id="send-btn" onclick="sendChat()">Send ↗</button></div></div>
       <div class="side-info"><div class="panel"><h3>Conversation settings</h3><div class="field"><label>Response style</label><select id="chat-style"><option value="You are a helpful, clear and accurate AI assistant.">Balanced</option><option value="You are a concise professional assistant. Give direct, structured answers.">Professional</option><option value="You are a creative brainstorming partner. Offer original ideas and useful alternatives.">Creative</option></select></div><p class="notice">Messages are sent to the API configured in Settings. Avoid entering confidential personal or business data until authentication and data protection are implemented.</p></div><div class="panel"><h3>Model connection</h3><p class="notice" id="chat-model-note">No model configured.</p><button class="btn secondary" style="width:100%" onclick="showView('settings')">Open settings</button></div></div>
     </div>
@@ -61,19 +61,19 @@
       <div class="field"><label>Topic or brief</label><textarea id="content-brief" placeholder="Describe the topic, audience, key points and desired tone…"></textarea></div>
       <div class="field"><label>Tone</label><select id="content-tone"><option>Clear and professional</option><option>Friendly and conversational</option><option>Confident and persuasive</option><option>Educational and informative</option></select></div>
       <button class="btn" id="generate-btn" onclick="generateContent()">Generate content ↗</button>
-    </div><div class="panel"><div class="panel-head"><h3>Your draft</h3><button class="btn secondary" onclick="copyDraft()">Copy</button></div><div class="output" id="content-output">Your generated content will appear here. Connect a model API to begin.</div></div></div>
+    </div><div class="panel"><div class="panel-head"><h3>Your draft</h3><button class="btn secondary" onclick="copyDraft()">Copy</button></div><div class="output" id="content-output">Your AI-generated draft will appear here.</div></div></div>
   </section>
   <section class="view" id="view-knowledge"><div class="panel"><div class="panel-head"><h3>Knowledge base</h3><span class="sub">RAG module · Planned integration</span></div><div class="empty"><div style="font-size:28px;margin-bottom:10px">▤</div><b>Build a knowledge layer for your AI</b><p>Document upload, text extraction, chunking, embeddings, vector search and source citations are not enabled in this prototype.</p><p class="notice">Next backend milestone: private file storage + PostgreSQL/pgvector retrieval with tenant-level access controls.</p></div></div></section>
   <section class="view" id="view-support"><div class="panel"><div class="panel-head"><h3>Live support workspace</h3><span class="sub">Customer service module · Preview</span></div><div class="empty"><div style="font-size:28px;margin-bottom:10px">◎</div><b>Human support inbox is not connected yet</b><p>This screen is a product placeholder. Real-time visitor chat, agent assignment, presence, notifications and human handoff still need backend services and a WebSocket/event layer.</p></div></div></section>
   <section class="view" id="view-playground"><div class="panel"><div class="panel-head"><h3>Model playground</h3><span class="sub">Connection diagnostics</span></div><div class="field"><label>Backend API base URL</label><input id="playground-url" placeholder="https://your-api.example.com"></div><button class="btn" onclick="checkApi()">Test connection</button><div class="output" id="diagnostics" style="margin-top:16px;min-height:100px">No diagnostic run yet.</div></div></section>
-  <section class="view" id="view-settings"><div class="content-grid"><div class="panel"><h3>API connection</h3><p class="notice">Enter your deployed FastAPI base URL. The URL is saved only in this browser. Never paste an AI provider secret here; provider credentials belong on the backend host.</p>
+  <section class="view" id="view-settings"><div class="content-grid"><div class="panel"><h3>API connection</h3><p class="notice">Optional: enter your deployed FastAPI URL for cloud AI. Without one, this app will try Chrome built-in on-device AI (Gemini Nano) when your device supports it. Never paste provider secrets into this page.</p>
       <div class="field"><label>Backend API URL</label><input id="api-url" placeholder="https://your-service.onrender.com"></div><button class="btn" onclick="saveSettings()">Save connection</button> <button class="btn secondary" onclick="checkApi()">Test API</button><div class="notice" id="settings-feedback" style="margin-top:12px"></div>
     </div><div class="panel"><h3>Security & deployment</h3><p class="notice">This is an early frontend prototype. User authentication, tenant isolation, persistent conversation storage, billing, audit logs and production-grade abuse controls are not implemented yet.</p><p class="notice">Configure AI_BASE_URL, AI_MODEL, AI_API_KEY and CORS_ORIGINS as private environment variables on your backend host. Do not commit secrets to GitHub.</p></div></div></section>
   <footer class="sub" style="margin-top:30px">Synvoraith AI · Conversational Intelligence Platform · Early access prototype</footer>
 </main></div><div class="toast" id="toast"></div>
 <script>
 const titles={overview:"Your AI workspace",chat:"AI conversation",studio:"Content studio",knowledge:"Knowledge base",support:"Live support",playground:"Model playground",settings:"Workspace settings"};
-let history=[{role:"assistant",content:"Hello! I’m ready to help you explore ideas, answer questions, and solve problems. Connect your model API in Settings to enable live responses."}];
+let history=[{role:"assistant",content:"Hello! I’m ready to help you explore ideas, answer questions, and solve problems. Cloud API optional · on-device AI supported in compatible Chrome versions."}];
 const $=id=>document.getElementById(id);
 function showView(name){document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));$("view-"+name).classList.add("active");document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===name));$("page-title").textContent=titles[name];if(name==="playground")$("playground-url").value=getApi();}
 document.querySelectorAll("#nav button").forEach(b=>b.addEventListener("click",()=>showView(b.dataset.view)));
@@ -82,12 +82,46 @@ function toast(s){const t=$("toast");t.textContent=s;t.style.display="block";set
 function saveSettings(){const value=$("api-url").value.trim().replace(/\/+$/,"");if(value&&!/^https?:\/\//i.test(value)){toast("Enter a valid http or https URL.");return;}localStorage.setItem("synvoraith_api_url",value);$("settings-feedback").textContent=value?"Backend URL saved in this browser. Test the connection next.":"Backend URL cleared.";toast("Connection settings saved.");}
 async function checkApi(){const base=$("api-url").value.trim().replace(/\/+$/,"")||getApi();if(!base){toast("Add your backend URL in Settings first.");return;}const out=$("diagnostics");out.textContent="Checking "+base+" …";try{const r=await fetch(base+"/health");if(!r.ok)throw new Error("HTTP "+r.status);const data=await r.json();out.textContent="Connected successfully\nStatus: "+data.status+"\nEnvironment: "+(data.environment||"unknown");$("status-dot").classList.add("ok");$("status-text").textContent="API connected";$("stat-connection").textContent="Online";}catch(e){out.textContent="Connection failed\n"+e.message+"\n\nCheck the API URL, backend deployment and CORS_ORIGINS configuration."; $("status-dot").classList.remove("ok");$("status-text").textContent="API unavailable";$("stat-connection").textContent="Offline";}}
 function addMessage(role,content){const node=document.createElement("div");node.className="msg "+role;const who=document.createElement("span");who.className="who";who.textContent=role==="user"?"You":"Synvoraith assistant";const body=document.createElement("div");body.textContent=content;node.append(who,body);$("messages").append(node);$("messages").scrollTop=$("messages").scrollHeight;}
-async function requestAI(messages){const base=getApi();if(!base)throw new Error("Connect your backend API in Settings before requesting a live AI response.");const response=await fetch(base+"/api/v1/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages,temperature:.7,max_tokens:1000})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.detail||"AI request failed ("+response.status+").");return data.reply||"The model returned an empty response.";}
+async function runBrowserModel(messages){
+  if(!("LanguageModel" in window))throw new Error("This browser does not provide Chrome's built-in AI model. Use the latest Chrome desktop or connect a hosted model API in Settings.");
+  const modelOptions={expectedInputs:[{type:"text",languages:["en"]}],expectedOutputs:[{type:"text",languages:["en"]}]};
+  const availability=await LanguageModel.availability(modelOptions);
+  if(availability==="unavailable")throw new Error("The on-device AI model is unavailable on this device. Connect a hosted AI backend in Settings to enable generation.");
+  const prompts=messages.map(m=>({role:m.role,content:m.content}));
+  const session=await LanguageModel.create({
+    ...modelOptions,
+    initialPrompts:prompts.slice(0,-1),
+    monitor(m){m.addEventListener("downloadprogress",e=>{$("status-text").textContent="Downloading on-device AI "+Math.round(e.loaded*100)+"%";});}
+  });
+  try{return await session.prompt(prompts[prompts.length-1].content);}
+  finally{session.destroy();}
+}
+async function requestAI(messages){
+  const base=getApi();
+  if(base){
+    try{
+      const response=await fetch(base+"/api/v1/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages,temperature:.7,max_tokens:1000})});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.detail||"AI backend returned HTTP "+response.status+".");
+      if(data.reply)return data.reply;
+      throw new Error("The backend returned an empty response.");
+    }catch(error){
+      console.warn("Hosted AI unavailable; trying browser AI.",error);
+    }
+  }
+  try{
+    const answer=await runBrowserModel(messages);
+    $("status-dot").classList.add("ok");$("status-text").textContent="On-device AI active";$("stat-connection").textContent="Local AI";
+    return answer;
+  }catch(localError){
+    throw new Error((base?"Hosted API failed and local AI is unavailable. ":"") + localError.message);
+  }
+}
 async function sendChat(){const input=$("chat-input"),text=input.value.trim();if(!text)return;input.value="";history.push({role:"user",content:text});addMessage("user",text);const btn=$("send-btn");btn.disabled=true;btn.textContent="Thinking…";try{const system=$("chat-style").value;const reply=await requestAI([{role:"system",content:system},...history.slice(-20)]);history.push({role:"assistant",content:reply});addMessage("assistant",reply);}catch(e){addMessage("assistant","I couldn’t reach the AI service: "+e.message);}finally{btn.disabled=false;btn.textContent="Send ↗";}}
 $("chat-input").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat();}});
 function clearChat(){history=[];$("messages").innerHTML="";addMessage("assistant","New conversation started. What would you like to work on?");}
 async function generateContent(){const brief=$("content-brief").value.trim();if(!brief){toast("Enter a topic or brief first.");return;}const btn=$("generate-btn");btn.disabled=true;btn.textContent="Generating…";$("content-output").textContent="Creating your draft…";try{const prompt="Create a "+$("content-type").value+" in a "+$("content-tone").value+" tone. Use this brief:\n"+brief+"\nReturn polished, ready-to-edit content. Do not invent facts.";const result=await requestAI([{role:"system",content:"You are an expert business content writer. Follow the brief carefully."},{role:"user",content:prompt}]);$("content-output").textContent=result;}catch(e){$("content-output").textContent="Unable to generate content: "+e.message;}finally{btn.disabled=false;btn.textContent="Generate content ↗";}}
 async function copyDraft(){const value=$("content-output").textContent;try{await navigator.clipboard.writeText(value);toast("Draft copied.");}catch(e){toast("Clipboard access is unavailable in this browser.");}}
-(function init(){const saved=getApi();$("api-url").value=saved;$("playground-url").value=saved;if(saved)checkApi();})();
+(async function init(){const saved=getApi();$("api-url").value=saved;$("playground-url").value=saved;if(saved){checkApi();return;}if("LanguageModel" in window){try{const a=await LanguageModel.availability({expectedInputs:[{type:"text",languages:["en"]}],expectedOutputs:[{type:"text",languages:["en"]}]});$("status-text").textContent=a==="available"?"On-device AI ready":a==="downloadable"?"On-device AI can be downloaded":a==="downloading"?"On-device AI downloading":"On-device AI unavailable";$("stat-connection").textContent=a==="available"?"Local AI":"Check device";$("status-dot").classList.toggle("ok",a==="available");}catch(e){$("status-text").textContent="AI availability unknown";}}else{$("status-text").textContent="Connect cloud AI in Settings";}})();
 </script>
 </body></html>
