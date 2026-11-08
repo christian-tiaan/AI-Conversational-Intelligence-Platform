@@ -13,3 +13,5 @@ services:
         sync: false
       - key: AI_MODEL
         sync: false
+      - key: CORS_ORIGINS
+        sync: false
